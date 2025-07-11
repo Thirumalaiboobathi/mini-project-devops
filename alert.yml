@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertservice
+  template:
+    metadata:
+      labels:
+        app: alertservice
+    spec:
+      containers:
+        - name: alertcontainer
+          image: alertservice:latest      # ✅ fixed here
+          imagePullPolicy: Never          # ✅ already correct
+          ports:
+            - containerPort: 6000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertservice
+spec:
+  selector:
+    app: alertservice
+  ports:
+    - protocol: TCP
+      port: 6000
+      targetPort: 6000
