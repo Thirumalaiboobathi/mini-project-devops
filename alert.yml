@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: alertservice
+  labels:                      
+    release: prometheus
 spec:
   replicas: 1
   selector:
@@ -11,22 +13,27 @@ spec:
     metadata:
       labels:
         app: alertservice
+        release: prometheus    
     spec:
       containers:
         - name: alertcontainer
-          image: alertservice:latest      # ✅ fixed here
-          imagePullPolicy: Never          # ✅ already correct
+          image: alertservice:latest
+          imagePullPolicy: Never
           ports:
-            - containerPort: 6000
+            - containerPort: 5000
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: alertservice
+  labels:
+    app: alertservice
+    release: prometheus        
 spec:
   selector:
     app: alertservice
   ports:
-    - protocol: TCP
-      port: 6000
-      targetPort: 6000
+    - name: http              
+      protocol: TCP
+      port: 5000
+      targetPort: 5000

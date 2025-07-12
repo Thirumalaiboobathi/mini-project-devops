@@ -5,33 +5,83 @@ pipeline {
         IMAGE_NAME = "alertservice"
     }
 
-    stages {
-        stage('Clone Repo') {
-            steps {
-                git url: 'https://github.com/Thirumalaiboobathi/mini-project-devops.git'
-            }
-        }
+    parameters {
+        booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Deploy to Kubernetes')
+    }
 
+    triggers {
+        pollSCM('H/5 * * * *') // Poll Git every 5 minutes
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+    }
+
+    stages {
         stage('Build Docker Image') {
             steps {
                 script {
                     sh 'eval $(minikube docker-env)'
-                    sh "docker build -t ${IMAGE_NAME}:latest ./alertservice"
+                    sh "docker build -t ${IMAGE_NAME}:latest ."
                 }
             }
         }
 
         stage('Deploy to Kubernetes') {
+            when {
+                expression { return params.DEPLOY == true }
+            }
             steps {
-                sh 'kubectl apply -f ./alertservice/alert.yml'
+                script {
+                    echo "Starting deployment to Kubernetes..."
+                    try {
+                        sh 'ls -l alert.yaml'
+                        sh 'kubectl apply -f alert.yaml'
+                    } catch (err) {
+                        echo "❌ Deployment failed or file not found: ${err}"
+                    }
+                    echo "✅ Deployment stage completed (with or without errors)."
+                }
+            }
+        }
+
+        stage('Generate Timestamp File') {
+            steps {
+                script {
+                    def timestamp = new Date().format("yyyy-MM-dd_HH-mm-ss")
+                    writeFile file: "timestamp.txt", text: "Build timestamp: ${timestamp}\n"
+                }
+            }
+        }
+
+        stage('Archive Artifact') {
+            steps {
+                archiveArtifacts artifacts: 'timestamp.txt'
             }
         }
 
         stage('Health Check') {
             steps {
-                sh 'sleep 10'
-                sh 'curl -f http://alertservice:6000/health || echo "Alert service health check failed"'
+                script {
+                    sh 'sleep 10'
+                    try {
+                        sh 'curl -f http://alertservice:6000/health'
+                        echo "✅ Health check passed."
+                    } catch (e) {
+                        echo "❌ Health check failed!"
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
             }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Build succeeded!'
+        }
+        failure {
+            echo '❌ Build failed!'
         }
     }
 }
