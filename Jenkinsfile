@@ -14,14 +14,22 @@ pipeline {
     }
 
     stages {
+        stage('Start Minikube') {
+            steps {
+                script {
+                    echo "🚀 Starting Minikube inside Jenkins agent..."
+                    sh 'minikube start --driver=docker'
+                }
+            }
+        }
+
         stage('Set Minikube Docker Env') {
             steps {
                 script {
                     echo "🔧 Setting Docker env to Minikube..."
-                    sh '''
-                        eval $(minikube docker-env)
-                        docker info || (echo "❌ Docker not configured properly!" && exit 1)
-                    '''
+                    def dockerEnv = sh(script: 'minikube docker-env --shell bash', returnStdout: true).trim()
+                    writeFile file: 'minikube-env.sh', text: dockerEnv
+                    sh 'source minikube-env.sh && docker info'
                 }
             }
         }
@@ -30,10 +38,7 @@ pipeline {
             steps {
                 script {
                     echo "📦 Building Docker image: ${IMAGE_NAME}"
-                    sh '''
-                        eval $(minikube docker-env)
-                        docker build -t ${IMAGE_NAME}:latest .
-                    '''
+                    sh 'source minikube-env.sh && docker build -t ${IMAGE_NAME}:latest .'
                 }
             }
         }
