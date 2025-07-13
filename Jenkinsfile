@@ -14,12 +14,7 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                git branch: 'alertservice', url: 'https://github.com/Thirumalaiboobathi/mini-project-devops.git'
-            }
-        }
-
+        
 
         stage('Start Minikube') {
             steps {
