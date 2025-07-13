@@ -10,6 +10,13 @@ pipeline {
     }
 
     stages {
+        stage('Checkout') {
+            steps {
+                // Get code from repository
+                checkout scm
+                
+            }
+        }
 
         stage('Start Minikube') {
             steps {
