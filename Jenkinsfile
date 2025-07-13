@@ -17,7 +17,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh 'eval $(minikube docker-env)'
+                    sh 'eval $(minikube docker-env)' // use minikube’s Docker
                     sh "docker build -t ${IMAGE_NAME}:latest ."
                 }
             }
@@ -28,7 +28,6 @@ pipeline {
                 script {
                     echo "Starting deployment to Kubernetes..."
                     try {
-                        sh 'ls -l alert.yaml'
                         sh 'kubectl apply -f alert.yaml'
                     } catch (err) {
                         echo "❌ Deployment failed or file not found: ${err}"
@@ -56,9 +55,13 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
-                    sh 'sleep 10'
+                    sh 'sleep 10' // wait for pod to be ready
+
+                    def serviceUrl = sh(script: 'minikube service alertservice --url', returnStdout: true).trim()
+                    echo "🔎 Checking service at: ${serviceUrl}"
+
                     try {
-                        sh 'curl -f http://localhost:5000/health'
+                        sh "curl -f ${serviceUrl}/health"
                         echo "✅ Health check passed."
                     } catch (e) {
                         echo "❌ Health check failed!"
@@ -67,7 +70,6 @@ pipeline {
                 }
             }
         }
-
     }
 
     post {
