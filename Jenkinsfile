@@ -17,7 +17,15 @@ pipeline {
         stage('Ensure Minikube Running') {
             steps {
                 script {
-                    sh 'minikube status || minikube start --driver=docker'
+                    echo "🔄 Checking Minikube status..."
+                    sh '''
+                        if ! minikube status | grep -q "Running"; then
+                            echo "Minikube not running. Starting..."
+                            minikube start --driver=docker
+                        else
+                            echo "✅ Minikube is already running."
+                        fi
+                    '''
                 }
             }
         }
@@ -25,7 +33,8 @@ pipeline {
         stage('Set Minikube Docker Env') {
             steps {
                 script {
-                    sh 'eval $(minikube docker-env)'
+                    echo "🔧 Setting Docker environment to Minikube"
+                    sh 'eval $(minikube docker-env) && echo "Docker env set"'
                 }
             }
         }
@@ -34,7 +43,7 @@ pipeline {
             steps {
                 script {
                     echo "📦 Building Docker image: ${IMAGE_NAME}"
-                    sh "docker build -t ${IMAGE_NAME}:latest ."
+                    sh 'eval $(minikube docker-env) && docker build -t ${IMAGE_NAME}:latest .'
                 }
             }
         }
@@ -98,8 +107,7 @@ pipeline {
             echo '💥 Build failed!'
         }
         always {
-            echo '🧹 Cleaning up if needed (e.g., killing port-forwards)...'
-            // sh 'pkill -f "kubectl port-forward" || true' // Uncomment if using port-forward
+            echo '🧹 Cleaning up if needed...'
         }
     }
 }
