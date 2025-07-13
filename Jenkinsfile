@@ -16,7 +16,9 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'alertservice', url: 'https://github.com/Thirumalaiboobathi/mini-project-devops.git'
+                // Get code from repository
+                checkout scm
+                
             }
         }
 
