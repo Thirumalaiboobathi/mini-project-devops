@@ -6,7 +6,7 @@ pipeline {
     }
 
     options {
-        buildDiscarder(logRotator(numToKeepStr: '5')) // Optional: keep last 5 builds
+        buildDiscarder(logRotator(numToKeepStr: '5')) // keep last 5 builds
     }
 
     stages {
@@ -16,7 +16,7 @@ pipeline {
                 script {
                     echo "🚀 Starting Minikube..."
                     sh '''
-                        minikube status || minikube start --driver=docker
+                        minikube status || minikube start --driver=docker --force
                     '''
                 }
             }
