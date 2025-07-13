@@ -5,36 +5,109 @@ pipeline {
         IMAGE_NAME = "weatherservice"
     }
 
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+    }
+
     stages {
+
+        stage('Start Minikube') {
+            steps {
+                script {
+                    echo "🚀 Starting Minikube..."
+                    sh '''
+                        minikube status || minikube start --driver=docker
+                    '''
+                }
+            }
+        }
+
+        stage('Set Minikube Docker Env') {
+            steps {
+                script {
+                    echo "🔧 Setting Docker env from Minikube..."
+                    def envOutput = sh(script: "minikube docker-env --shell bash", returnStdout: true).trim()
+                    def envLines = envOutput.split("\n")
+                    def dockerEnvVars = envLines.findAll { it.startsWith("export") }
+                                                .collect { it.replace("export ", "").split("=", 2) }
+                                                .collectEntries { [(it[0]): it[1].replaceAll('"', '')] }
+                    withEnv(dockerEnvVars.collect { "${it.key}=${it.value}" }) {
+                        sh "docker info"
+                        sh "docker version"
+                    }
+                }
+            }
+        }
+
         stage('Clone Repository') {
             steps {
-                git url: 'https://github.com/Thirumalaiboobathi/mini-project-devops.git'
+                git url: 'https://github.com/Thirumalaiboobathi/mini-project-devops.git', branch: 'alertservice'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh 'eval $(minikube docker-env) && docker build -t ${IMAGE_NAME}:latest ./weatherservice'
+                    echo "📦 Building Docker image: ${IMAGE_NAME}"
+                    def envOutput = sh(script: "minikube docker-env --shell bash", returnStdout: true).trim()
+                    def envLines = envOutput.split("\n")
+                    def dockerEnvVars = envLines.findAll { it.startsWith("export") }
+                                                .collect { it.replace("export ", "").split("=", 2) }
+                                                .collectEntries { [(it[0]): it[1].replaceAll('"', '')] }
+
+                    withEnv(dockerEnvVars.collect { "${it.key}=${it.value}" }) {
+                        sh "docker build -t ${IMAGE_NAME}:latest ./weatherservice"
+                    }
                 }
             }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
-                sh 'kubectl apply -f weather.yml'
+                script {
+                    echo "🚀 Deploying to Kubernetes..."
+                    try {
+                        sh "kubectl apply -f weather.yml"
+                        echo "✅ Deployment successful"
+                    } catch (err) {
+                        echo "❌ Deployment failed: ${err}"
+                        currentBuild.result = 'FAILURE'
+                        error("Stopping pipeline")
+                    }
+                }
+            }
+        }
+
+        stage('Generate Timestamp File') {
+            steps {
+                script {
+                    def timestamp = new Date().format("yyyy-MM-dd_HH-mm-ss")
+                    writeFile file: "timestamp.txt", text: "Build timestamp: ${timestamp}\n"
+                    echo "🕒 Timestamp: ${timestamp}"
+                }
+            }
+        }
+
+        stage('Archive Artifact') {
+            steps {
+                archiveArtifacts artifacts: 'timestamp.txt'
             }
         }
 
         stage('Health Check') {
             steps {
                 script {
-                    sh 'sleep 10'
-                    def healthCheck = sh(script: 'curl -sf http://weatherservice:5001/health', returnStatus: true)
-                    if (healthCheck != 0) {
-                        error("❌ Weather service health check failed.")
-                    } else {
-                        echo "✅ Weather service is healthy."
+                    echo "⏳ Waiting for weather service to become ready..."
+                    sh "sleep 10"
+                    def serviceUrl = sh(script: "minikube service ${IMAGE_NAME} --url", returnStdout: true).trim()
+                    echo "🔍 Checking health at: ${serviceUrl}/health"
+
+                    try {
+                        def response = sh(script: "curl -s -f ${serviceUrl}/health", returnStdout: true).trim()
+                        echo "✅ Health check OK: ${response}"
+                    } catch (e) {
+                        echo "❌ Weather service health check failed"
+                        currentBuild.result = 'UNSTABLE'
                     }
                 }
             }
@@ -43,10 +116,13 @@ pipeline {
 
     post {
         success {
-            echo "✅ Pipeline completed successfully!"
+            echo "✅ Weather pipeline completed successfully!"
         }
         failure {
-            echo "❌ Pipeline failed. Please check the logs."
+            echo "❌ Weather pipeline failed!"
+        }
+        always {
+            echo "🧹 Pipeline finished."
         }
     }
 }
