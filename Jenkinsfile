@@ -16,7 +16,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/Thirumalaiboobathi/mini-project-devops.git'
+                git branch: 'alertservice', url: 'https://github.com/Thirumalaiboobathi/mini-project-devops.git'
             }
         }
 
