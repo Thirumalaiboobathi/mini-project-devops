@@ -11,12 +11,20 @@ pipeline {
 
     stages {
 
+        stage('Checkout') {
+            steps {
+                // Get code from repository
+                checkout scm
+                
+            }
+        }
+
         stage('Start Minikube') {
             steps {
                 script {
                     echo "🚀 Starting Minikube..."
                     sh '''
-                        minikube status || minikube start --driver=docker
+                        minikube status || minikube start --driver=docker --force
                     '''
                 }
             }
@@ -39,11 +47,7 @@ pipeline {
             }
         }
 
-        stage('Clone Repository') {
-            steps {
-                git url: 'https://github.com/Thirumalaiboobathi/mini-project-devops.git', branch: 'alertservice'
-            }
-        }
+      
 
         stage('Build Docker Image') {
             steps {
