@@ -16,9 +16,10 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                git branch: 'main', url: 'https://github.com/Thirumalaiboobathi/mini-project-devops.git'
             }
         }
+
 
         stage('Start Minikube') {
             steps {
