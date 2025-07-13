@@ -15,7 +15,7 @@ COPY . /app
 RUN pip install --no-cache-dir flask requests prometheus_flask_exporter
 
 # Expose the app's port
-EXPOSE 5000
+EXPOSE 5001
 
 # Run the app
 CMD ["python", "app.py"]

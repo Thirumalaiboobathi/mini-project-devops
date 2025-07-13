@@ -6,7 +6,7 @@ pipeline {
     }
 
     stages {
-        stage('Clone Repo') {
+        stage('Clone Repository') {
             steps {
                 git url: 'https://github.com/Thirumalaiboobathi/mini-project-devops.git'
             }
@@ -15,8 +15,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh 'eval $(minikube docker-env)'
-                    sh "docker build -t ${IMAGE_NAME}:latest ./weatherservice"
+                    sh 'eval $(minikube docker-env) && docker build -t ${IMAGE_NAME}:latest ./weatherservice'
                 }
             }
         }
@@ -29,9 +28,25 @@ pipeline {
 
         stage('Health Check') {
             steps {
-                sh 'sleep 10'
-                sh 'curl -f http://weatherservice:5000/health || echo "Weather service health check failed"'
+                script {
+                    sh 'sleep 10'
+                    def healthCheck = sh(script: 'curl -sf http://weatherservice:5001/health', returnStatus: true)
+                    if (healthCheck != 0) {
+                        error("❌ Weather service health check failed.")
+                    } else {
+                        echo "✅ Weather service is healthy."
+                    }
+                }
             }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Pipeline completed successfully!"
+        }
+        failure {
+            echo "❌ Pipeline failed. Please check the logs."
         }
     }
 }
