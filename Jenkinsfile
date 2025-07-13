@@ -28,7 +28,7 @@ pipeline {
                 script {
                     echo "🚀 Starting Minikube..."
                     sh '''
-                        minikube status || minikube start --driver=docker
+                        minikube status || minikube start --driver=docker --force
                     '''
                 }
             }
