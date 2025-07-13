@@ -5,10 +5,6 @@ pipeline {
         IMAGE_NAME = "alertservice"
     }
 
-    parameters {
-        booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Deploy to Kubernetes')
-    }
-
     triggers {
         pollSCM('H/5 * * * *') // Poll Git every 5 minutes
     }
@@ -28,9 +24,6 @@ pipeline {
         }
 
         stage('Deploy to Kubernetes') {
-            when {
-                expression { return params.DEPLOY == true }
-            }
             steps {
                 script {
                     echo "Starting deployment to Kubernetes..."
