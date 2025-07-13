@@ -14,31 +14,6 @@ pipeline {
     }
 
     stages {
-        stage('Ensure Minikube Running') {
-            steps {
-                script {
-                    echo "🔄 Checking Minikube status..."
-                    sh '''
-                        if ! minikube status | grep -q "Running"; then
-                            echo "Minikube not running. Starting..."
-                            minikube start --driver=docker
-                        else
-                            echo "✅ Minikube is already running."
-                        fi
-                    '''
-                }
-            }
-        }
-
-        stage('Set Minikube Docker Env') {
-            steps {
-                script {
-                    echo "🔧 Setting Docker environment to Minikube"
-                    sh 'eval $(minikube docker-env) && echo "Docker env set"'
-                }
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
                 script {
@@ -54,10 +29,12 @@ pipeline {
                     echo "🚀 Starting deployment to Kubernetes..."
                     try {
                         sh 'kubectl apply -f alert.yaml'
+                        echo "✅ Deployment succeeded."
                     } catch (err) {
-                        echo "❌ Deployment failed or file not found: ${err}"
+                        echo "❌ Deployment failed: ${err}"
+                        currentBuild.result = 'FAILURE'
+                        error("Stopping pipeline due to failed deployment.")
                     }
-                    echo "✅ Deployment stage completed (with or without errors)."
                 }
             }
         }
