@@ -6,19 +6,27 @@ pipeline {
     }
 
     triggers {
-        pollSCM('H/5 * * * *') // Poll Git every 5 minutes
+        pollSCM('H/5 * * * *')
     }
 
     options {
-        buildDiscarder(logRotator(numToKeepStr: '5')) // Keep last 5 builds
+        buildDiscarder(logRotator(numToKeepStr: '5'))
     }
 
     stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Start Minikube') {
             steps {
                 script {
-                    echo "🚀 Starting Minikube inside Jenkins agent..."
-                    sh 'minikube start --driver=docker'
+                    echo "🚀 Starting Minikube..."
+                    sh '''
+                        minikube status || minikube start --driver=docker
+                    '''
                 }
             }
         }
@@ -26,10 +34,16 @@ pipeline {
         stage('Set Minikube Docker Env') {
             steps {
                 script {
-                    echo "🔧 Setting Docker env to Minikube..."
-                    def dockerEnv = sh(script: 'minikube docker-env --shell bash', returnStdout: true).trim()
-                    writeFile file: 'minikube-env.sh', text: dockerEnv
-                    sh 'source minikube-env.sh && docker info'
+                    echo "🔧 Setting Docker env from Minikube..."
+                    def envOutput = sh(script: "minikube docker-env --shell bash", returnStdout: true).trim()
+                    def envLines = envOutput.split("\n")
+                    def dockerEnvVars = envLines.findAll { it.startsWith("export") }
+                                                .collect { it.replace("export ", "").split("=", 2) }
+                                                .collectEntries { [(it[0]): it[1].replaceAll('"', '')] }
+                    withEnv(dockerEnvVars.collect { "${it.key}=${it.value}" }) {
+                        sh "docker info"
+                        sh "docker version"
+                    }
                 }
             }
         }
@@ -38,7 +52,15 @@ pipeline {
             steps {
                 script {
                     echo "📦 Building Docker image: ${IMAGE_NAME}"
-                    sh 'source minikube-env.sh && docker build -t ${IMAGE_NAME}:latest .'
+                    def envOutput = sh(script: "minikube docker-env --shell bash", returnStdout: true).trim()
+                    def envLines = envOutput.split("\n")
+                    def dockerEnvVars = envLines.findAll { it.startsWith("export") }
+                                                .collect { it.replace("export ", "").split("=", 2) }
+                                                .collectEntries { [(it[0]): it[1].replaceAll('"', '')] }
+
+                    withEnv(dockerEnvVars.collect { "${it.key}=${it.value}" }) {
+                        sh "docker build -t ${IMAGE_NAME}:latest ."
+                    }
                 }
             }
         }
@@ -46,14 +68,14 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 script {
-                    echo "🚀 Starting deployment to Kubernetes..."
+                    echo "🚀 Deploying to Kubernetes..."
                     try {
-                        sh 'kubectl apply -f alert.yaml'
-                        echo "✅ Deployment succeeded."
+                        sh "kubectl apply -f alert.yaml"
+                        echo "✅ Deployment successful"
                     } catch (err) {
                         echo "❌ Deployment failed: ${err}"
                         currentBuild.result = 'FAILURE'
-                        error("Stopping pipeline due to failed deployment.")
+                        error("Stopping pipeline")
                     }
                 }
             }
@@ -64,7 +86,7 @@ pipeline {
                 script {
                     def timestamp = new Date().format("yyyy-MM-dd_HH-mm-ss")
                     writeFile file: "timestamp.txt", text: "Build timestamp: ${timestamp}\n"
-                    echo "🕒 Timestamp file created: ${timestamp}"
+                    echo "🕒 Timestamp: ${timestamp}"
                 }
             }
         }
@@ -79,17 +101,15 @@ pipeline {
             steps {
                 script {
                     echo "⏳ Waiting for service to be ready..."
-                    sh 'sleep 10'
-
-                    def serviceUrl = sh(script: 'minikube service alertservice --url', returnStdout: true).trim()
-                    echo "🔎 Checking service at: ${serviceUrl}/health"
+                    sh "sleep 10"
+                    def serviceUrl = sh(script: "minikube service ${IMAGE_NAME} --url", returnStdout: true).trim()
+                    echo "🔍 Checking health at: ${serviceUrl}/health"
 
                     try {
                         def response = sh(script: "curl -s -f ${serviceUrl}/health", returnStdout: true).trim()
-                        echo "✅ Health check passed: ${response}"
+                        echo "✅ Health check OK: ${response}"
                     } catch (e) {
-                        echo "❌ Health check failed!"
-                        echo "ℹ️ Possible causes: Pod not ready, wrong port, or incorrect /health endpoint"
+                        echo "❌ Health check failed"
                         currentBuild.result = 'UNSTABLE'
                     }
                 }
@@ -105,7 +125,7 @@ pipeline {
             echo '💥 Build failed!'
         }
         always {
-            echo '🧹 Cleaning up if needed...'
+            echo '🧹 Pipeline completed.'
         }
     }
 }
