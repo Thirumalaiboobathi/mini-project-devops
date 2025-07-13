@@ -14,11 +14,26 @@ pipeline {
     }
 
     stages {
+        stage('Set Minikube Docker Env') {
+            steps {
+                script {
+                    echo "🔧 Setting Docker env to Minikube..."
+                    sh '''
+                        eval $(minikube docker-env)
+                        docker info || (echo "❌ Docker not configured properly!" && exit 1)
+                    '''
+                }
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 script {
                     echo "📦 Building Docker image: ${IMAGE_NAME}"
-                    sh 'eval $(minikube docker-env) && docker build -t ${IMAGE_NAME}:latest .'
+                    sh '''
+                        eval $(minikube docker-env)
+                        docker build -t ${IMAGE_NAME}:latest .
+                    '''
                 }
             }
         }
@@ -69,6 +84,7 @@ pipeline {
                         echo "✅ Health check passed: ${response}"
                     } catch (e) {
                         echo "❌ Health check failed!"
+                        echo "ℹ️ Possible causes: Pod not ready, wrong port, or incorrect /health endpoint"
                         currentBuild.result = 'UNSTABLE'
                     }
                 }
