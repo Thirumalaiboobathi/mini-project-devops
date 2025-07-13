@@ -58,7 +58,7 @@ pipeline {
                 script {
                     sh 'sleep 10'
                     try {
-                        sh 'curl -f http://alertservice:6000/health'
+                        sh 'curl -f http://localhost:5000/health'
                         echo "✅ Health check passed."
                     } catch (e) {
                         echo "❌ Health check failed!"
@@ -67,6 +67,7 @@ pipeline {
                 }
             }
         }
+
     }
 
     post {
