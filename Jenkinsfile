@@ -5,14 +5,53 @@ pipeline {
         IMAGE_NAME = "gatewayservice"
     }
 
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '5')) // Optional: keep last 5 builds
+    }
+
     stages {
-        
+
+        stage('Start Minikube') {
+            steps {
+                script {
+                    echo "🚀 Starting Minikube..."
+                    sh '''
+                        minikube status || minikube start --driver=docker
+                    '''
+                }
+            }
+        }
+
+        stage('Set Minikube Docker Env') {
+            steps {
+                script {
+                    echo "🔧 Setting Docker env from Minikube..."
+                    def envOutput = sh(script: "minikube docker-env --shell bash", returnStdout: true).trim()
+                    def envLines = envOutput.split("\n")
+                    def dockerEnvVars = envLines.findAll { it.startsWith("export") }
+                                                .collect { it.replace("export ", "").split("=", 2) }
+                                                .collectEntries { [(it[0]): it[1].replaceAll('"', '')] }
+                    withEnv(dockerEnvVars.collect { "${it.key}=${it.value}" }) {
+                        sh "docker info"
+                        sh "docker version"
+                    }
+                }
+            }
+        }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh 'eval $(minikube docker-env)'  // Use Minikube Docker daemon
-                    sh "docker build -t ${IMAGE_NAME}:latest ./getwayservice"
+                    echo "📦 Building Docker image: ${IMAGE_NAME}"
+                    def envOutput = sh(script: "minikube docker-env --shell bash", returnStdout: true).trim()
+                    def envLines = envOutput.split("\n")
+                    def dockerEnvVars = envLines.findAll { it.startsWith("export") }
+                                                .collect { it.replace("export ", "").split("=", 2) }
+                                                .collectEntries { [(it[0]): it[1].replaceAll('"', '')] }
+
+                    withEnv(dockerEnvVars.collect { "${it.key}=${it.value}" }) {
+                        sh "docker build -t ${IMAGE_NAME}:latest ./getwayservice"
+                    }
                 }
             }
         }
@@ -21,23 +60,47 @@ pipeline {
             steps {
                 script {
                     echo "🛠️ Applying Kubernetes configuration..."
-                    sh 'kubectl apply -f gateway.yml'
+                    try {
+                        sh 'kubectl apply -f gateway.yml'
+                        echo "✅ Deployment successful"
+                    } catch (err) {
+                        echo "❌ Deployment failed: ${err}"
+                        currentBuild.result = 'FAILURE'
+                        error("Stopping pipeline")
+                    }
                 }
+            }
+        }
+
+        stage('Generate Timestamp File') {
+            steps {
+                script {
+                    def timestamp = new Date().format("yyyy-MM-dd_HH-mm-ss")
+                    writeFile file: "timestamp.txt", text: "Build timestamp: ${timestamp}\n"
+                    echo "🕒 Timestamp: ${timestamp}"
+                }
+            }
+        }
+
+        stage('Archive Artifact') {
+            steps {
+                archiveArtifacts artifacts: 'timestamp.txt'
             }
         }
 
         stage('Health Check') {
             steps {
                 script {
-                    sh 'sleep 10' // Give time for pod to become ready
-                    def serviceUrl = sh(script: "minikube service gatewayservice --url", returnStdout: true).trim()
-                    echo "🔎 Gateway service URL: ${serviceUrl}"
+                    echo "⏳ Waiting for service to be ready..."
+                    sh "sleep 10"
+                    def serviceUrl = sh(script: "minikube service ${IMAGE_NAME} --url", returnStdout: true).trim()
+                    echo "🔍 Checking health at: ${serviceUrl}/health"
 
                     try {
-                        sh "curl -f ${serviceUrl}/health"
-                        echo "✅ Health check passed."
-                    } catch (err) {
-                        echo "❌ Gateway health check failed!"
+                        def response = sh(script: "curl -s -f ${serviceUrl}/health", returnStdout: true).trim()
+                        echo "✅ Health check OK: ${response}"
+                    } catch (e) {
+                        echo "❌ Health check failed"
                         currentBuild.result = 'UNSTABLE'
                     }
                 }
@@ -51,6 +114,9 @@ pipeline {
         }
         failure {
             echo '❌ Gateway pipeline failed!'
+        }
+        always {
+            echo '🧹 Pipeline completed.'
         }
     }
 }
