@@ -30,7 +30,7 @@ metadata:
     app: alertservice
     release: prometheus        
 spec:
-  type: NodePort  #  Allows access from outside the cluster
+  type: NodePort
   selector:
     app: alertservice
   ports:
@@ -38,4 +38,4 @@ spec:
       protocol: TCP
       port: 5050
       targetPort: 5050
-      nodePort: 30550  #  Optional: hardcoded for consistency
+      nodePort: 30550
